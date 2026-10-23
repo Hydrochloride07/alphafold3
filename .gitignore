@@ -1,0 +1,16 @@
+# Local Python environments and development artifacts.
+/.local/
+/.venv/
+
+# Python bytecode and tool caches at any depth.
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pytype/
+.hypothesis/
+
+# Generated chemical component databases.
+/src/alphafold3/constants/converters/ccd.msgpack
+/src/alphafold3/constants/converters/chemical_component_sets.msgpack
