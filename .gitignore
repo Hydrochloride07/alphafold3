@@ -1,0 +1,7 @@
+/.local/
+/.venv/
+__pycache__/
+*.pyc
+/.pytest_cache/
+/src/alphafold3/constants/converters/ccd.msgpack
+/src/alphafold3/constants/converters/chemical_component_sets.msgpack

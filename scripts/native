@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+# All paths are local to this checkout; invoke from any working directory.
+set -euo pipefail
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+unset PYTHONPATH PYTHONHOME LD_LIBRARY_PATH
+export UV_CACHE_DIR="$ROOT/.local/uv-cache"
+export UV_PYTHON_INSTALL_DIR="$ROOT/.local/python"
+export CMAKE_BUILD_PARALLEL_LEVEL="${CMAKE_BUILD_PARALLEL_LEVEL:-2}"
+mkdir -p "$ROOT/.local"
+case "${1:-help}" in
+  setup)
+    if [[ -n "${NATIVE_PYPI_INDEX:-}" ]]; then
+      uv venv --python 3.12 --allow-existing .venv
+      uv export --frozen --no-emit-project --format requirements-txt \
+        --output-file .local/locked-requirements.txt > .local/export.log
+      uv pip install --python .venv/bin/python --require-hashes \
+        -r .local/locked-requirements.txt --index-url "$NATIVE_PYPI_INDEX"
+      uv pip install --python .venv/bin/python --no-deps --editable . \
+        --index-url "$NATIVE_PYPI_INDEX"
+    fi
+    uv sync --locked --python 3.12
+    uv run --locked build_data
+    ;;
+  rebuild)
+    uv sync --locked --reinstall-package alphafold3
+    uv run --locked build_data
+    ;;
+  check)
+    uv run --locked python scripts/check_native.py
+    ;;
+  gpu-check)
+    nvidia-smi
+    uv run --locked python scripts/check_native.py --gpu
+    ;;
+  test)
+    JAX_PLATFORMS=cpu uv run --locked python -m alphafold3.common.folding_input_test \
+      --test_tmpdir="$ROOT/.local/test-tmp"
+    ;;
+  benchmark)
+    shift
+    exec uv run --locked python scripts/benchmark_native.py "$@"
+    ;;
+  run)
+    shift
+    exec uv run --locked python run_alphafold.py "$@"
+    ;;
+  *)
+    echo 'Usage: bash scripts/native {setup|rebuild|check|gpu-check|test|benchmark [args]|run [AF3 flags]}'
+    ;;
+esac
