@@ -1,6 +1,7 @@
 # Local Python environments and development artifacts.
 /.local/
 /.venv/
+/.vscode/
 
 # Python bytecode and tool caches at any depth.
 __pycache__/
@@ -14,3 +15,5 @@ __pycache__/
 # Generated chemical component databases.
 /src/alphafold3/constants/converters/ccd.msgpack
 /src/alphafold3/constants/converters/chemical_component_sets.msgpack
+
+/build/

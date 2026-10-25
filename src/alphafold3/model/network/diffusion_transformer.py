@@ -126,6 +126,7 @@ class SelfAttentionConfig(base_config.BaseConfig):
   value_dim: int | None = None
 
 
+## single self attention
 def self_attention(
     x: jnp.ndarray,  # (num_tokens, ch)
     mask: jnp.ndarray,  # (num_tokens,)
@@ -269,6 +270,7 @@ class CrossAttentionConfig(base_config.BaseConfig):
   value_dim: int = 128
 
 
+# cross attention 算子
 def cross_attention(
     x_q: jnp.ndarray,  # (..., Q, C)
     x_k: jnp.ndarray,  # (..., K, C)

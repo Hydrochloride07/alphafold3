@@ -156,6 +156,7 @@ class GridSelfAttention(hk.Module):
     self.global_config = global_config
     self.transpose = transpose
 
+  ## triangle attention
   @hk.transparent
   def _attention(
       self,
