@@ -5,3 +5,5 @@ __pycache__/
 /.pytest_cache/
 /src/alphafold3/constants/converters/ccd.msgpack
 /src/alphafold3/constants/converters/chemical_component_sets.msgpack
+/build/
+/.vscode/
