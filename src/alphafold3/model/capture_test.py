@@ -130,6 +130,44 @@ def test_grid_attention_chunks_and_recycles(tmp_path):
   assert sink.manifest['event_count'] == len(rows)
 
 
+@pytest.mark.parametrize('transpose,step', [(False, 4), (True, 3)])
+def test_sampled_grid_attention_preserves_full_computation(tmp_path, monkeypatch, transpose, step):
+  def net(x):
+    def body(i, value):
+      with capture.scope(stage='trunk', recycle=i, recycle_count=2, layer=0, layer_count=1):
+        indices = jnp.arange(value.shape[0])
+        mask = (indices[:, None] + 2 * indices[None, :]) % 3 != 0
+        return modules.GridSelfAttention(
+            modules.GridSelfAttention.Config(num_head=2), GC, transpose=transpose, name='grid'
+        )(value, mask)
+    return body(0, x) if hk.running_init() else hk.fori_loop(0, 2, body, x)
+
+  x = jax.random.normal(KEY, (5, 5, 8))
+  _, dense = run_capture(tmp_path, net, x)
+  writes = []
+  original_write = capture.CaptureSession.write
+
+  def counted_write(self, metadata, *args, **kwargs):
+    writes.append(metadata)
+    return original_write(self, metadata, *args, **kwargs)
+
+  monkeypatch.setattr(capture.CaptureSession, 'write', counted_write)
+  _, sparse = run_capture(tmp_path, net, x, config={
+      'stage': ['trunk'], 'pairformer_recycles': [1], 'pairformer_blocks': [1],
+      'pairformer_attention_i_step': [step]})
+  assert len(writes) == len(sparse) == 2
+  assert sorted(r['metadata']['sampled_i'] for r, _ in sparse) == list(range(0, 5, step))
+  for record, tensors in sparse:
+    m = record['metadata']
+    assert m['i_step'] == step and m['recycle'] == 1 and m['layer'] == 0
+    ref = next(t for r, t in dense if r['metadata']['recycle'] == 1 and
+               r['metadata']['chunk_start'] == m['chunk_start'])
+    offset = m['sampled_i'] - m['chunk_start']
+    for name in ('query', 'key', 'value', 'mask', 'result'):
+      np.testing.assert_array_equal(tensors[name], ref[name][offset:offset + 1])
+    np.testing.assert_array_equal(tensors['bias'], ref['bias'])
+
+
 @pytest.mark.parametrize('equation', ['ikc,jkc->ijc', 'kjc,kic->ijc'])
 @pytest.mark.parametrize('use_glu', [False, True])
 def test_triangle_inputs_and_contraction(tmp_path, equation, use_glu):
@@ -222,13 +260,28 @@ def test_local_layout(tmp_path, direction):
     check_manual_attention(t, r['metadata']['scale'])
 
 
-def test_diffusion_scan_vmap_indices(tmp_path):
+@pytest.mark.parametrize('selected_steps', [None, [1, 5, 10, 100, 200]])
+def test_diffusion_scan_vmap_indices(tmp_path, monkeypatch, selected_steps):
   batch = SimpleNamespace(
     predicted_structure_info=SimpleNamespace(atom_mask=jnp.ones((2, 2)))
   )
-  config = diffusion_head.SampleConfig(num_samples=2, steps=3)
+  steps = 3 if selected_steps is None else 200
+  config = diffusion_head.SampleConfig(num_samples=2, steps=steps)
+  writes = []
+  original_write = capture.CaptureSession.write
+
+  def counted_write(self, metadata, *args, **kwargs):
+    writes.append(metadata)
+    return original_write(self, metadata, *args, **kwargs)
+
+  monkeypatch.setattr(capture.CaptureSession, 'write', counted_write)
 
   def net():
+    if selected_steps is not None:
+      for stage in ('conditioning', 'template', 'msa', 'trunk', 'confidence'):
+        with capture.scope(stage=stage):
+          capture.emit('identity', {'result': jnp.ones(1)})
+
     def denoise(positions, level):
       # A real self-attention call inside the original diffusion sampler.
       x = positions.reshape(4, 3)
@@ -240,12 +293,23 @@ def test_diffusion_scan_vmap_indices(tmp_path):
     with capture.scope(stage='diffusion'):
       return diffusion_head.sample(denoise, batch, hk.next_rng_key(), config)
 
-  _, rows = run_capture(tmp_path, net)
-  assert len(rows) == 6
+  filters = {'diffusion_steps': selected_steps} if selected_steps else None
+  _, rows = run_capture(tmp_path, net, config=filters)
+  diffusion_rows = [(r, t) for r, t in rows if r['metadata']['stage'] == 'diffusion']
+  wanted = range(steps) if selected_steps is None else [v - 1 for v in selected_steps]
+  assert len(diffusion_rows) == len(wanted) * 2
+  # Rejected steps must not even reach the host writer.
+  assert len(writes) == len(rows)
   assert {
-    (r['metadata']['diffusion_step'], r['metadata']['sample']) for r, _ in rows
-  } == {(i, j) for i in range(3) for j in range(2)}
-  for r, t in rows:
+    (r['metadata']['diffusion_step'], r['metadata']['sample']) for r, _ in diffusion_rows
+  } == {(i, j) for i in wanted for j in range(2)}
+  assert all(r['metadata']['diffusion_step_count'] == steps for r, _ in diffusion_rows)
+  if selected_steps is not None:
+    assert {r['metadata']['stage'] for r, _ in rows} == {
+      'conditioning', 'template', 'msa', 'trunk', 'confidence', 'diffusion'
+    }
+    assert len(rows) == 15
+  for r, t in diffusion_rows:
     assert t['pair_logits'] is None
     check_manual_attention(t, r['metadata']['scale'])
 
@@ -323,7 +387,9 @@ def test_write_failure_marks_run_failed(tmp_path):
 
 
 @pytest.mark.parametrize(
-  'config', [{'typo': [0]}, {'layer': []}, {'layer': [-1]}, {'stage': [1]}]
+  'config', [{'typo': [0]}, {'layer': []}, {'layer': [-1]}, {'stage': [1]},
+             {'diffusion_steps': [0]}, {'diffusion_steps': [True]},
+             {'diffusion_steps': []}]
 )
 def test_invalid_filters(tmp_path, config):
   with pytest.raises(ValueError):
@@ -391,10 +457,12 @@ def test_model_runner_cached_invocation_identity(tmp_path, monkeypatch):
   runner.run_inference(x, KEY)  # Return safely to an executable without callbacks.
 
 
-def test_real_model_recycle_and_confidence_control_flow(tmp_path, monkeypatch):
+@pytest.mark.parametrize('trunk_only', [False, True])
+@pytest.mark.parametrize('num_recycles', [0, 1])
+def test_real_model_recycle_and_confidence_control_flow(tmp_path, monkeypatch, trunk_only, num_recycles):
   # Exercise Model.__call__ itself, substituting tiny networks for the huge model.
   from alphafold3.model import model as af3_model
-  config = af3_model.Model.Config(num_recycles=1)
+  config = af3_model.Model.Config(num_recycles=num_recycles, stop_after_trunk=trunk_only)
 
   batch = SimpleNamespace(
     num_res=2,
@@ -445,11 +513,12 @@ def test_real_model_recycle_and_confidence_control_flow(tmp_path, monkeypatch):
   )
   monkeypatch.setattr(af3_model.confidence_head, 'ConfidenceHead', TinyConfidence)
   monkeypatch.setattr(af3_model.distogram_head, 'DistogramHead', TinyDistogram)
-  monkeypatch.setattr(
-    af3_model.Model,
-    '_sample_diffusion',
-    lambda self, *args, **kwargs: {'atom_positions': jnp.ones((3, 2, 3))},
-  )
+  def sample_diffusion(self, *args, **kwargs):
+    if trunk_only:
+      raise AssertionError('Diffusion must not execute in trunk-only mode')
+    return {'atom_positions': jnp.ones((3, 2, 3))}
+
+  monkeypatch.setattr(af3_model.Model, '_sample_diffusion', sample_diffusion)
   config.evoformer.pair_channel = 8
   config.evoformer.seq_channel = 8
   _, rows = run_capture(tmp_path, lambda: af3_model.Model(config)({}))
@@ -457,15 +526,61 @@ def test_real_model_recycle_and_confidence_control_flow(tmp_path, monkeypatch):
   confidence = [
     r['metadata'] for r, _ in rows if r['metadata']['stage'] == 'confidence'
   ]
-  assert len(trunk) == 4
+  assert len(trunk) == 2 * (num_recycles + 1)
   assert {(r['recycle'], r['layer']) for r in trunk} == {
-    (i, j) for i in range(2) for j in range(2)
+    (i, j) for i in range(num_recycles + 1) for j in range(2)
   }
+  if trunk_only:
+    assert not confidence
+    return
   assert len(confidence) == 6
   assert {(r['sample'], r['layer']) for r in confidence} == {
     (i, j) for i in range(3) for j in range(2)
   }
   assert all(r['recycle'] is None for r in confidence)
+
+
+def test_pairformer_selected_blocks_and_recycles(tmp_path, monkeypatch):
+  writes = []
+  original_write = capture.CaptureSession.write
+
+  def counted_write(self, metadata, *args, **kwargs):
+    writes.append(metadata)
+    return original_write(self, metadata, *args, **kwargs)
+
+  monkeypatch.setattr(capture.CaptureSession, 'write', counted_write)
+
+  def net(x):
+    def layer(x):
+      return modules.GridSelfAttention(
+        modules.GridSelfAttention.Config(num_head=2), GC, transpose=False, name='grid'
+      )(x, jnp.ones(x.shape[:2]))
+
+    stack = capture.layer_stack(48, stage='trunk')(layer)
+    with capture.scope(stage='conditioning'):
+      capture.emit('identity', {'result': x})
+
+    def recycle(i, x):
+      with capture.scope(recycle=i, recycle_count=11):
+        return stack(x)
+
+    if hk.running_init():
+      return recycle(0, x)
+    return hk.fori_loop(0, 11, recycle, x)
+
+  _, rows = run_capture(
+    tmp_path, net, jax.random.normal(KEY, (5, 5, 8)),
+    config={'stage': ['conditioning', 'trunk'], 'pairformer_blocks': [1, 4, 8, 16],
+            'pairformer_recycles': [0, 5, 10]},
+  )
+  trunk = [r['metadata'] for r, _ in rows if r['metadata']['stage'] == 'trunk']
+  assert len(trunk) == 3 * 4 * 3  # Three actual attention chunks per block.
+  assert {(r['recycle'], r['layer']) for r in trunk} == {
+    (r, l) for r in (0, 5, 10) for l in (0, 3, 7, 15)
+  }
+  assert all(r['recycle_count'] == 11 and r['layer_count'] == 48 for r in trunk)
+  assert len(rows) == len(trunk) + 1
+  assert len(writes) == len(rows)  # Unselected blocks never reach the host writer.
 
 
 def test_runtime_callback_failure(tmp_path, monkeypatch):
@@ -490,3 +605,89 @@ def test_runtime_callback_failure(tmp_path, monkeypatch):
   manifest = json.loads((sink.path / 'manifest.json').read_text())
   assert manifest['status'] == 'failed'
   assert manifest['invocations'][0]['status'] == 'failed'
+
+
+def test_lossless_compressed_capture_and_disk_reserve(tmp_path, monkeypatch):
+  import zipfile
+  monkeypatch.setenv('AF3_CAPTURE_COMPRESS', '1')
+  sink = capture.CaptureSession(tmp_path)
+  value = np.arange(24, dtype=np.float32).reshape(4, 6)
+  with sink.activate():
+    invocation = sink.begin('compressed', 1)
+    sink.write({'invocation_id': invocation, 'operator': 'attention'}, {'result': value})
+    sink.finish(invocation)
+  record, tensors = records(sink)[0]
+  np.testing.assert_array_equal(tensors['result'], value)
+  with zipfile.ZipFile(sink.path / 'events' / (record['event_id'] + '.npz')) as archive:
+    assert all(m.compress_type == zipfile.ZIP_DEFLATED for m in archive.infolist())
+  monkeypatch.setenv('AF3_CAPTURE_MIN_FREE_GB', '100000000')
+  sink = capture.CaptureSession(tmp_path)
+  with pytest.raises(OSError, match='disk reserve'):
+    with sink.activate():
+      invocation = sink.begin('disk-reserve', 1)
+      sink.write({'invocation_id': invocation, 'operator': 'attention'}, {'result': value})
+  assert sink.manifest['status'] == 'failed'
+  assert sink.manifest['event_count'] == 0
+
+
+def test_confidence_vmap_keeps_distinct_attention_sites(tmp_path):
+  config = modules.PairFormerIteration.Config(num_layer=1)
+  config.pair_attention.num_head = 2
+  config.single_attention = dt.SelfAttentionConfig(num_head=2)
+  config.single_transition = modules.TransitionBlock.Config()
+  config.triangle_multiplication_incoming.use_glu_kernel = False
+  config.triangle_multiplication_outgoing.use_glu_kernel = False
+
+  def net(pair, single):
+    def sample(p, s, index):
+      def block(xs):
+        p, s = xs
+        return modules.PairFormerIteration(config, GC, with_single=True,
+            name='confidence_pairformer')(p, jnp.ones(p.shape[:2]), s, jnp.ones(s.shape[:1]))
+      with capture.scope(stage='confidence', sample=index, sample_count=2):
+        return capture.layer_stack(2, stage='confidence')(block)((p, s))
+    return mapping.sharded_map(sample, in_axes=(0, 0, 0))(
+        jnp.stack([pair, pair]), jnp.stack([single, single]), jnp.arange(2))
+
+  _, rows = run_capture(tmp_path, net, jax.random.normal(KEY, (3, 3, 8)),
+                        jax.random.normal(KEY, (3, 8)))
+  attention = [r['metadata'] for r, _ in rows if r['metadata']['operator'] == 'attention']
+  assert {m['direction'] for m in attention} == {'starting', 'ending'}
+  identities = {(m['module_path'], m['direction'], m['layer'], m['sample'],
+                 m['chunk_start'], m['chunk_end']) for m in attention}
+  assert len(identities) == len(attention)
+
+
+def test_capture_singleton_map_preserves_random_keys(tmp_path):
+  def net(x):
+    def one(value):
+      key = hk.next_rng_key()
+      noise = jax.random.normal(key, value.shape)
+      capture.emit('attention', {'query': value, 'result': value + noise})
+      return value + noise
+    result = mapping.sharded_map(one)(x)
+    return result, hk.next_rng_key()
+  _, rows = run_capture(tmp_path, net, jnp.ones((3, 2, 2)))
+  assert len(rows) == 3
+
+
+@pytest.mark.parametrize('dtype', [jnp.float32, jnp.bfloat16])
+def test_transition_sharding_preserves_parameters_and_values(dtype):
+  x = jax.random.normal(KEY, (13, 11, 128)).astype(dtype)
+
+  def transform(chunk):
+    def fn(value):
+      transition = modules.TransitionBlock(
+          modules.TransitionBlock.Config(), GC, name='transition'
+      )
+      return mapping.sharded_apply(transition, chunk)(value) if chunk else transition(value)
+    return hk.transform(fn)
+
+  ordinary, sharded = transform(None), transform(4)
+  params = ordinary.init(KEY, x)
+  assert_tree_equal(params, sharded.init(KEY, x), exact=True)
+  expected = jax.jit(ordinary.apply)(params, KEY, x)
+  actual = jax.jit(sharded.apply)(params, KEY, x)
+  expected, actual = map(lambda v: np.asarray(v, dtype=np.float32), (expected, actual))
+  assert np.isfinite(actual).all()
+  assert np.linalg.norm(expected - actual) / np.linalg.norm(expected) < 0.005

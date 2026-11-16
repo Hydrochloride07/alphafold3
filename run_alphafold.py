@@ -30,6 +30,8 @@ https://github.com/google-deepmind/alphafold3/blob/main/WEIGHTS_TERMS_OF_USE.md
 
 from collections.abc import Callable, Sequence
 import csv
+import contextlib
+import json
 import dataclasses
 import datetime
 import enum
@@ -58,6 +60,7 @@ from alphafold3.model import params
 from alphafold3.model import post_processing
 from alphafold3.model.components import utils
 from etils import epath
+from alphafold3.model import capture
 import haiku as hk
 import jax
 from jax import numpy as jnp
@@ -402,6 +405,9 @@ _NUM_SEEDS = flags.DEFINE_integer(
     lower_bound=1,
 )
 
+_CAPTURE_DIR = flags.DEFINE_string('capture_dir', None, 'Directory for real operator tensor captures.')
+_CAPTURE_CONFIG = flags.DEFINE_string('capture_config', None, 'Optional JSON capture filters.')
+
 # Output controls.
 _SAVE_EMBEDDINGS = flags.DEFINE_bool(
     'save_embeddings',
@@ -470,6 +476,7 @@ class ModelRunner:
     self._model_config = config
     self._device = device
     self._model_dir = epath.Path(model_dir)
+    self._capture_session = None
 
   @functools.cached_property
   def model_params(self) -> hk.Params:
@@ -479,19 +486,23 @@ class ModelRunner:
   @functools.cached_property
   def _model(
       self,
-  ) -> Callable[[jnp.ndarray, features.BatchDict], model.ModelResult]:
+  ) -> Callable[[jnp.ndarray, features.BatchDict, jnp.ndarray], model.ModelResult]:
     """Loads model parameters and returns a jitted model forward pass."""
 
     @hk.transform
-    def forward_fn(batch):
-      return model.Model(self._model_config)(batch)
+    def forward_fn(batch, invocation):
+      if self._capture_session is None:
+        return model.Model(self._model_config)(batch)
+      with capture.scope(session=self._capture_session, invocation_id=invocation):
+        return model.Model(self._model_config)(batch)
 
     return functools.partial(
         jax.jit(forward_fn.apply, device=self._device), self.model_params
     )
 
   def run_inference(
-      self, featurised_example: features.BatchDict, rng_key: jnp.ndarray
+      self, featurised_example: features.BatchDict, rng_key: jnp.ndarray,
+      *, input_name: str | None = None, seed: int | None = None,
   ) -> model.ModelResult:
     """Computes a forward pass of the model on a featurised example."""
     featurised_example = jax.device_put(
@@ -501,8 +512,21 @@ class ModelRunner:
         self._device,
     )
 
-    result = self._model(rng_key, featurised_example)
-    result = jax.tree.map(np.asarray, result)
+    sink = capture.session()
+    if sink is not self._capture_session:
+      self.__dict__.pop('_model', None)
+      self._capture_session = sink
+    invocation = sink.begin(input_name, seed) if sink else 0
+    try:
+      result = self._model(rng_key, featurised_example, jnp.int32(invocation))
+      result = jax.tree.map(np.asarray, result)
+    except BaseException:
+      if sink:
+        sink.finish(invocation, failed=True)
+      raise
+    else:
+      if sink:
+        sink.finish(invocation)
     result = jax.tree.map(
         lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x,
         result,
@@ -609,7 +633,7 @@ def predict_structure(
     print(f'Running model inference with seed {seed}...')
     inference_start_time = time.time()
     rng_key = jax.random.PRNGKey(seed)
-    result = model_runner.run_inference(example, rng_key)
+    result = model_runner.run_inference(example, rng_key, input_name=fold_input.name, seed=seed)
     print(
         f'Running model inference with seed {seed} took'
         f' {time.time() - inference_start_time:.2f} seconds.'
@@ -1070,28 +1094,36 @@ def main(_):
   else:
     model_runner = None
 
-  num_fold_inputs = 0
-  for fold_input in fold_inputs:
-    if _NUM_SEEDS.value is not None:
-      print(f'Expanding fold job {fold_input.name} to {_NUM_SEEDS.value} seeds')
-      fold_input = fold_input.with_multiple_seeds(_NUM_SEEDS.value)
-    process_fold_input(
-        fold_input=fold_input,
-        data_pipeline_config=data_pipeline_config,
-        model_runner=model_runner,
-        output_dir=_OUTPUT_DIR.value / fold_input.sanitised_name(),
-        buckets=tuple(int(bucket) for bucket in _BUCKETS.value),
-        ref_max_modified_date=max_template_date,
-        conformer_max_iterations=_CONFORMER_MAX_ITERATIONS.value,
-        resolve_msa_overlaps=_RESOLVE_MSA_OVERLAPS.value,
-        fix_standalone_glycans=_FIX_STANDALONE_GLYCANS.value,
-        force_output_dir=_FORCE_OUTPUT_DIR.value,
-        compress_large_output_files=_COMPRESS_LARGE_OUTPUT_FILES.value,
-        save_terms_of_use=_SAVE_TERMS_OF_USE.value,
-    )
-    num_fold_inputs += 1
+  if _CAPTURE_CONFIG.value and not _CAPTURE_DIR.value:
+    raise ValueError('--capture_config requires --capture_dir')
+  capture_config = None
+  if _CAPTURE_CONFIG.value:
+    with open(_CAPTURE_CONFIG.value) as stream:
+      capture_config = json.load(stream)
+  sink = capture.CaptureSession(_CAPTURE_DIR.value, capture_config) if _CAPTURE_DIR.value else None
+  with sink.activate() if sink else contextlib.nullcontext():
+    num_fold_inputs = 0
+    for fold_input in fold_inputs:
+      if _NUM_SEEDS.value is not None:
+        print(f'Expanding fold job {fold_input.name} to {_NUM_SEEDS.value} seeds')
+        fold_input = fold_input.with_multiple_seeds(_NUM_SEEDS.value)
+      process_fold_input(
+          fold_input=fold_input,
+          data_pipeline_config=data_pipeline_config,
+          model_runner=model_runner,
+          output_dir=_OUTPUT_DIR.value / fold_input.sanitised_name(),
+          buckets=tuple(int(bucket) for bucket in _BUCKETS.value),
+          ref_max_modified_date=max_template_date,
+          conformer_max_iterations=_CONFORMER_MAX_ITERATIONS.value,
+          resolve_msa_overlaps=_RESOLVE_MSA_OVERLAPS.value,
+          fix_standalone_glycans=_FIX_STANDALONE_GLYCANS.value,
+          force_output_dir=_FORCE_OUTPUT_DIR.value,
+          compress_large_output_files=_COMPRESS_LARGE_OUTPUT_FILES.value,
+          save_terms_of_use=_SAVE_TERMS_OF_USE.value,
+      )
+      num_fold_inputs += 1
 
-  print(f'Done running {num_fold_inputs} fold jobs.')
+    print(f'Done running {num_fold_inputs} fold jobs.')
 
 
 if __name__ == '__main__':

@@ -23,6 +23,7 @@ from collections.abc import Callable
 
 from alphafold3.common import base_config
 from alphafold3.model import feat_batch
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model.components import haiku_modules as hm
 from alphafold3.model.components import utils
@@ -370,10 +371,27 @@ def sample(
       jnp.tile(noise_levels[None, 0], (num_samples,)),
   )
 
-  apply_denoising_step = hk.vmap(
-      apply_denoising_step, in_axes=(0, None), split_rng=(not hk.running_init())
-  )
-  result, _ = hk.scan(apply_denoising_step, init, noise_levels[1:], unroll=4)
+  if capture.enabled():
+    original_step = apply_denoising_step
+
+    def indexed_step(carry, level, sample_index, step_index):
+      with capture.scope(stage='diffusion', sample=sample_index, sample_count=num_samples,
+                         diffusion_step=step_index, diffusion_step_count=config.steps):
+        return original_step(carry, level)
+
+    mapped_step = hk.vmap(indexed_step, in_axes=(0, None, 0, None),
+                         split_rng=(not hk.running_init()))
+
+    def scan_step(carry, xs):
+      level, step_index = xs
+      return mapped_step(carry, level, jnp.arange(num_samples), step_index)
+
+    result, _ = hk.scan(scan_step, init, (noise_levels[1:], jnp.arange(config.steps)), unroll=4)
+  else:
+    apply_denoising_step = hk.vmap(
+        apply_denoising_step, in_axes=(0, None), split_rng=(not hk.running_init())
+    )
+    result, _ = hk.scan(apply_denoising_step, init, noise_levels[1:], unroll=4)
   _, positions_out, _ = result
 
   final_dense_atom_mask = jnp.tile(mask[None], (num_samples, 1, 1))

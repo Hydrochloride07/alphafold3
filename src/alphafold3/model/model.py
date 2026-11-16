@@ -31,6 +31,7 @@ from alphafold3.common import base_config
 from alphafold3.model import confidences
 from alphafold3.model import feat_batch
 from alphafold3.model import features
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model.atom_layout import atom_layout
 from alphafold3.model.components import mapping
@@ -237,6 +238,7 @@ class Model(hk.Module):
     num_recycles: int = 10
     return_embeddings: bool = False
     return_distogram: bool = False
+    stop_after_trunk: bool = False
 
   def __init__(self, config: Config, name: str = 'diffuser'):
     super().__init__(name=name)
@@ -280,21 +282,23 @@ class Model(hk.Module):
     embedding_module = evoformer_network.Evoformer(
         self.config.evoformer, self.global_config
     )
-    target_feat = create_target_feat_embedding(
-        batch=batch,  # pyrefly: ignore[bad-argument-type]
-        config=embedding_module.config,
-        global_config=self.global_config,
-    )
+    with capture.scope(stage='conditioning'):
+      target_feat = create_target_feat_embedding(
+          batch=batch,  # pyrefly: ignore[bad-argument-type]
+          config=embedding_module.config,
+          global_config=self.global_config,
+      )
 
-    def recycle_body(_, args):
+    def recycle_body(recycle_index, args):
       prev, key = args
       key, subkey = jax.random.split(key)
-      embeddings = embedding_module(
-          batch=batch,
-          prev=prev,
-          target_feat=target_feat,
-          key=subkey,
-      )
+      with capture.scope(recycle=recycle_index, recycle_count=self.config.num_recycles + 1):
+        embeddings = embedding_module(
+            batch=batch,
+            prev=prev,
+            target_feat=target_feat,
+            key=subkey,
+        )
       embeddings['pair'] = embeddings['pair'].astype(jnp.float32)
       embeddings['single'] = embeddings['single'].astype(jnp.float32)
       return embeddings, key
@@ -318,6 +322,13 @@ class Model(hk.Module):
       num_iter = self.config.num_recycles + 1
       embeddings, _ = hk.fori_loop(0, num_iter, recycle_body, (embeddings, key))
 
+    if self.config.stop_after_trunk:
+      return {
+          'single_embeddings': embeddings['single'],
+          'pair_embeddings': embeddings['pair'],
+          'target_feat': embeddings['target_feat'],
+      }
+
     samples = self._sample_diffusion(
         batch,  # pyrefly: ignore[bad-argument-type]
         embeddings,
@@ -325,18 +336,22 @@ class Model(hk.Module):
     )
 
     # Compute dist_error_fn over all samples for distance error logging.
-    confidence_output = mapping.sharded_map(
-        lambda dense_atom_positions: confidence_head.ConfidenceHead(
+    def compute_confidence(dense_atom_positions, sample_index):
+      with capture.scope(stage='confidence', sample=sample_index,
+                         sample_count=samples['atom_positions'].shape[0]):
+        return confidence_head.ConfidenceHead(
             self.config.heads.confidence, self.global_config
         )(
             dense_atom_positions=dense_atom_positions,
             embeddings=embeddings,
-            seq_mask=batch.token_features.mask,  # pyrefly: ignore[missing-attribute]
-            token_atoms_to_pseudo_beta=batch.pseudo_beta_info.token_atoms_to_pseudo_beta,  # pyrefly: ignore[missing-attribute]
-            asym_id=batch.token_features.asym_id,  # pyrefly: ignore[missing-attribute]
-        ),
-        in_axes=0,
-    )(samples['atom_positions'])
+            seq_mask=batch.token_features.mask,
+            token_atoms_to_pseudo_beta=batch.pseudo_beta_info.token_atoms_to_pseudo_beta,
+            asym_id=batch.token_features.asym_id,
+        )
+
+    confidence_output = mapping.sharded_map(compute_confidence, in_axes=(0, 0))(
+        samples['atom_positions'], jnp.arange(samples['atom_positions'].shape[0])
+    )
 
     distogram = distogram_head.DistogramHead(
         self.config.heads.distogram, self.global_config

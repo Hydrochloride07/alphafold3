@@ -20,6 +20,7 @@
 """Diffusion transformer model."""
 
 from alphafold3.common import base_config
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model.atom_layout import atom_layout
 from alphafold3.model.components import haiku_modules as hm
@@ -153,7 +154,8 @@ def self_attention(
   value_dim = value_dim // num_head
 
   qk_shape = (num_head, key_dim)
-  q = hm.Linear(qk_shape, use_bias=True, name=f'{name}q_projection')(x)
+  q_projection = hm.Linear(qk_shape, use_bias=True, name=f'{name}q_projection')
+  q = q_projection(x)
   k = hm.Linear(qk_shape, use_bias=False, name=f'{name}k_projection')(x)
 
   # In some situations the gradient norms can blow up without running this
@@ -170,6 +172,14 @@ def self_attention(
   v_shape = (num_head, value_dim)
   v = hm.Linear(v_shape, use_bias=False, name=f'{name}v_projection')(x)
   weighted_avg = jnp.einsum('...hqk,...khc->...qhc', weights, v)
+  capture.emit(
+      'diffusion_global_attention',
+      dict(query=q, key=k, value=v, mask=mask, mask_bias=bias,
+           pair_logits=pair_logits, bias=bias if pair_logits is None else bias + pair_logits,
+           result=weighted_avg),
+      scale=key_dim ** -0.5, implementation='einsum', layout='...qhc',
+      module_path=q_projection.module_name.removesuffix('q_projection'),
+  )
   weighted_avg = jnp.reshape(weighted_avg, weighted_avg.shape[:-2] + (-1,))
 
   gate_logits = hm.Linear(
@@ -214,6 +224,12 @@ class Transformer(hk.Module):
       pair_cond: jnp.ndarray | None,
   ) -> jnp.ndarray:
     def block(act, pair_logits):
+      if capture.enabled():
+        with capture.scope(layer=capture.current('super_block', 0) * self.config.super_block_size + capture.current('block', 0), layer_count=self.config.num_blocks):
+          return block_body(act, pair_logits)
+      return block_body(act, pair_logits)
+
+    def block_body(act, pair_logits):
       act += self_attention(
           act,
           mask,
@@ -254,12 +270,12 @@ class Transformer(hk.Module):
             name='pair_logits_projection',
         )(pair_act)
         pair_logits = jnp.transpose(pair_logits, [2, 3, 0, 1])
-      return hk.experimental.layer_stack(
-          self.config.super_block_size, with_per_layer_inputs=True
+      return capture.layer_stack(
+          self.config.super_block_size, index="block", with_per_layer_inputs=True
       )(block)(act, pair_logits)
 
-    return hk.experimental.layer_stack(
-        num_super_blocks, with_per_layer_inputs=True
+    return capture.layer_stack(
+        num_super_blocks, index="super_block", with_per_layer_inputs=True
     )(super_block)(act)[0]
 
 
@@ -299,9 +315,10 @@ def cross_attention(
   key_dim = config.key_dim // config.num_head
   value_dim = config.value_dim // config.num_head
 
-  q = hm.Linear(
+  q_projection = hm.Linear(
       (config.num_head, key_dim), use_bias=True, name=f'{name}q_projection'
-  )(x_q)
+  )
+  q = q_projection(x_q)
   k = hm.Linear(
       (config.num_head, key_dim), use_bias=False, name=f'{name}k_projection'
   )(x_k)
@@ -321,6 +338,14 @@ def cross_attention(
       (config.num_head, value_dim), use_bias=False, name=f'{name}v_projection'
   )(x_k)
   weighted_avg = jnp.einsum('...hqk,...khc->...qhc', weights, v)
+  capture.emit(
+      'diffusion_local_attention',
+      dict(query=q, key=k, value=v, mask=None, mask_query=mask_q, mask_key=mask_k, mask_bias=bias,
+           pair_logits=pair_logits, bias=bias if pair_logits is None else bias + pair_logits,
+           result=weighted_avg),
+      scale=key_dim ** -0.5, implementation='einsum', layout='...qhc',
+      module_path=q_projection.module_name.removesuffix('q_projection'),
+  )
   weighted_avg = jnp.reshape(weighted_avg, weighted_avg.shape[:-2] + (-1,))
 
   gate_logits = hm.Linear(
@@ -366,6 +391,19 @@ class CrossAttTransformer(hk.Module):
       pair_cond: jnp.ndarray,  # (num_subsets, num_queries, num_keys, ch)
   ) -> jnp.ndarray:
     def block(queries_act, pair_logits):
+      if capture.enabled():
+        with capture.scope(
+            direction='decoder' if 'decoder' in self.name else 'encoder',
+            layout_tensors=dict(
+                queries_to_keys_indices=queries_to_keys.gather_idxs,
+                queries_to_keys_mask=queries_to_keys.gather_mask,
+                queries_to_keys_input_shape=queries_to_keys.input_shape,
+            ),
+        ):
+          return block_body(queries_act, pair_logits)
+      return block_body(queries_act, pair_logits)
+
+    def block_body(queries_act, pair_logits):
       # copy the queries activations to the keys layout
       keys_act = atom_layout.convert(
           queries_to_keys, queries_act, layout_axes=(-3, -2)
@@ -406,6 +444,6 @@ class CrossAttTransformer(hk.Module):
     # (num_block, num_subsets, num_heads, num_queries, num_keys)
     pair_logits = jnp.transpose(pair_logits, [3, 0, 4, 1, 2])
 
-    return hk.experimental.layer_stack(
+    return capture.layer_stack(
         self.config.num_blocks, with_per_layer_inputs=True
     )(block)(queries_act, pair_logits)[0]

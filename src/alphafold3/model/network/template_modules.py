@@ -23,6 +23,7 @@ from alphafold3.common import base_config
 from alphafold3.constants import residue_names
 from alphafold3.jax import geometry
 from alphafold3.model import features
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model import protein_data_processing
 from alphafold3.model.components import haiku_modules as hm
@@ -187,21 +188,22 @@ class TemplateEmbedding(hk.Module):
     subkeys = jnp.array(jax.random.split(key, num_templates))
 
     def scan_fn(carry, x):
-      templates, key = x
-      embedding = template_embedder(
-          query_embedding,
-          templates,
-          padding_mask_2d,
-          multichain_mask_2d,
-          key,
-      )
+      templates, key, template_index = x
+      with capture.scope(template=template_index, template_count=num_templates):
+        embedding = template_embedder(
+            query_embedding,
+            templates,
+            padding_mask_2d,
+            multichain_mask_2d,
+            key,
+        )
       return carry + embedding, None
 
     scan_init = jnp.zeros(
         (num_res, num_res, c.num_channels), dtype=query_embedding.dtype
     )
     summed_template_embeddings, _ = hk.scan(
-        scan_fn, scan_init, (templates, subkeys)
+        scan_fn, scan_init, (templates, subkeys, jnp.arange(num_templates))
     )
 
     embedding = summed_template_embeddings / (1e-7 + num_templates)
@@ -351,7 +353,7 @@ class SingleTemplateEmbedding(hk.Module):
             c.template_stack, gc, name='template_embedding_iteration'
         )(act=x, pair_mask=padding_mask_2d)
 
-      template_stack = hk.experimental.layer_stack(c.template_stack.num_layer)(
+      template_stack = capture.layer_stack(c.template_stack.num_layer, stage="template")(
           template_iteration_fn
       )
       act = template_stack(act)

@@ -23,6 +23,7 @@ from collections.abc import Sequence
 from typing import Literal
 
 from alphafold3.common import base_config
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model.components import haiku_modules as hm
 from alphafold3.model.components import mapping
@@ -188,6 +189,12 @@ class GridSelfAttention(hk.Module):
         bias=bias,
         implementation=self.global_config.flash_attention_implementation,
     )
+    capture.emit(
+        'attention', dict(query=q, key=k, value=v, mask=mask, bias=bias, result=weighted_avg),
+        direction='ending' if self.transpose else 'starting',
+        implementation=self.global_config.flash_attention_implementation,
+        scale=qkv_dim ** -0.5, layout='...qhc',
+    )
     weighted_avg = jnp.reshape(weighted_avg, weighted_avg.shape[:-2] + (-1,))
 
     gate_values = hm.Linear(
@@ -275,6 +282,7 @@ class TriangleMultiplication(hk.Module):
     Returns:
       Outputs, should have same shape/type as output_act
     """
+    original_act, original_mask = act, mask
     mask = mask[None, ...]
     num_channels = act.shape[-1]
     equation = {
@@ -320,6 +328,7 @@ class TriangleMultiplication(hk.Module):
     a, b = jnp.split(projection, 2, axis=1)
     a, b = jnp.squeeze(a, axis=1), jnp.squeeze(b, axis=1)
     act = jnp.einsum(equation, a, b)
+    contraction_result = act
     act = hm.LayerNorm(name='center_norm', axis=0, param_axis=0)(act)
 
     act = jnp.transpose(act, (1, 2, 0))
@@ -336,7 +345,13 @@ class TriangleMultiplication(hk.Module):
         initializer=self.global_config.final_init,
     )(input_act)
     act *= jax.nn.sigmoid(gate_out)
-
+    capture.emit(
+        'triangle_multiplication',
+        dict(act=original_act, mask=original_mask, a=a, b=b,
+             contraction_result=contraction_result, result=act),
+        equation=equation, module_equation=self.config.equation,
+        direction='outgoing' if self.config.equation == 'ikc,jkc->ijc' else 'incoming',
+    )
     return act
 
 

@@ -23,6 +23,7 @@ from collections.abc import Callable, Sequence
 import functools
 from typing import Any, TypeVar
 
+from alphafold3.model import capture
 import haiku as hk
 import jax
 import jax.numpy as jnp
@@ -88,6 +89,24 @@ def sharded_map(
     # Guarantees initialisation independent of shard_size. Doesn't incur a high
     # memory cost, as long as large concrete tensors are not encountered.
     return hk.vmap(fun, in_axes=in_axes, out_axes=out_axes, split_rng=False)
+  elif capture.enabled() and shard_size == 1:
+    # A singleton shard needs no vmap. On GPU, nesting callback batching inside
+    # the attention shard scan can reuse the first attention site's metadata.
+    # Preserve vmap's one-key split and singleton output axes explicitly.
+    def singleton_fun(*args):
+      axes = _expand_axes(in_axes, args)
+      unbatched = jax.tree.map(
+          lambda x, axis: x if axis is PROXY else jnp.take(x, 0, axis=axis),
+          args, axes,
+      )
+      with hk.with_rng(hk.next_rng_keys(1)[0]):
+        result = fun(*unbatched)
+      return jax.tree.map(
+          lambda x, axis: x if axis is PROXY else jnp.expand_dims(x, axis),
+          result, _expand_axes(out_axes, result),
+      )
+
+    return sharded_apply(singleton_fun, shard_size, in_axes, out_axes)
   else:
     vmapped_fun = hk.vmap(fun, in_axes, out_axes, split_rng=True)
     return sharded_apply(vmapped_fun, shard_size, in_axes, out_axes)
@@ -164,6 +183,11 @@ def sharded_apply(
           args,
           in_axes_,
       )
+      if capture.enabled():
+        axes = [a for a in jax.tree.leaves(in_axes_) if isinstance(a, int)]
+        with capture.scope(chunk_start=slice_start, chunk_end=slice_start + slice_size,
+                           chunk_axis=axes[0] if axes else 0, chunk_total=in_size):
+          return fun(*input_slice, **kwargs)
       return fun(*input_slice, **kwargs)
 
     remainder_shape_dtype = hk.eval_shape(

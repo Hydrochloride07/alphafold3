@@ -110,3 +110,55 @@ JAX_PLATFORMS=cpu .venv/bin/python -m pytest src/alphafold3/model/capture_test.p
 小尺寸 CPU 测试覆盖实际算子、Haiku 参数兼容、循环索引与保存可靠性。
 真实权重和 GPU 全模型抓取还需在本机普通终端或服务器验证；CPU 模块测试
 不能代替该项验收。
+
+## 单个 Pairformer block 的首轮 trunk 采集
+
+`scripts/capture_trunk.py` 为本机 `demo_cut.json` 提供两阶段入口：
+先在 CPU 上复用序列/修饰精确匹配的已有 MSA 和模板并重新特征化，再使用
+真实权重运行 GPU trunk。不会调用 MSA/template 搜索管线。
+
+```bash
+JAX_PLATFORMS=cpu .venv/bin/python scripts/capture_trunk.py \
+  --prepare-only --output-dir=/new/attempt-directory
+
+JAX_PLATFORMS=cuda,cpu TF_FORCE_UNIFIED_MEMORY=true \
+XLA_CLIENT_MEM_FRACTION=4.0 XLA_PYTHON_CLIENT_PREALLOCATE=false \
+XLA_FLAGS='--xla_disable_hlo_passes=custom-kernel-fusion-rewriter --xla_gpu_autotune_level=0' \
+AF3_CAPTURE_COMPRESS=1 AF3_CAPTURE_MIN_FREE_GB=10 \
+.venv/bin/python scripts/capture_trunk.py \
+  --run-existing --transition-chunk-size=128 --output-dir=/new/attempt-directory
+```
+
+运行需清除继承的 `PYTHONPATH/PYTHONHOME/LD_LIBRARY_PATH` 及旧 allocator
+覆盖；GPU 执行需设备可访问。入口验证 managed-memory 指针、真实权重哈希及
+prepared 输入/特征哈希。`num_recycles=0` 计算初始轮全部 48 blocks，随后停止，
+不运行 diffusion/confidence/distogram。只采集内部 `recycle=0,layer=0` 的五类
+算子，旧选择接口对应 `pairformer_blocks=[1]`。不开启采集时默认模型行为不变。
+
+此输入共 1257 tokens，padding=1280、attention chunk=128 时预期 23 个事件、
+140 个数组、原始数组 7.4365 GiB。4 GiB GPU 上，`XLA_CLIENT_MEM_FRACTION=2.0`
+的初始尝试在 GEMM 自动调优阶段 OOM；上述配置提高池上限并关闭该自动调优，
+不删减输入、MSA、模型层或 attention 分片。是否成功以状态和验证报告为准。
+若整块 transition 引发严重换页，`--transition-chunk-size=128` 将其按独立行
+分片计算，避免完整 6.25 GiB 中间矩阵；不改变 attention 的 chunk、输入或层数。
+FP32/BF16 回归检查参数一致及数值误差；实际分片配置记录在 state.json 中。
+
+运行成功后，按 `archives`、`numerical`、`finalize` 顺序调用
+`scripts/validate_trunk_capture.py OUTPUT --phase=PHASE`。完整性检查读取全部
+数组；数值复算分别检查 triangle contraction 的三个 channel、两个 attention
+方向首个分片的三个 i，以及 single attention 全部 heads。报告明确覆盖范围。
+可读文件名中的 recycle/block 均从 0 开始；原 UUID 仍保留在 `event_id` 中。
+
+## 多输入 trunk 与稀疏 i 采集
+
+`capture_trunk.py --prepare-only` 支持 `--num-recycles=10 --capture-recycles=10`
+和 `--capture-blocks=1,16,32`。执行 11 轮完整 trunk，写盘只限选定轮和 block；
+`--filename-block-base=1` 将内部 layer 0/15/31 命名为 block 01/16/32。
+`run_trunk_batch.py` 顺序运行独立 attempt 并验收，避免多个 GPU 进程竞争显存。
+
+`--capture-attention-i-step=256` 只对 trunk 的 grid attention 导出全局 i 为
+256 整数倍的 Q/K/V/mask/result。计算分片和模型输出不变，bias 保留完整矩阵，
+triangle multiplication 与 single attention 的采集不变。当前实现要求采集
+步长至少等于计算分片大小，保证每分片最多一个采集行。JSON 的 `chunk_start/end`
+仍是计算分片边界，`sampled_i` 是实际导出的全局 i，Q/K/V/result 首维长度为 1。
+设备端在传输前合并 i、recycle 和 layer 条件；不合条件的分片不进入主机 writer。

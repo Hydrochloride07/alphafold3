@@ -24,6 +24,7 @@ import functools
 from alphafold3.common import base_config
 from alphafold3.model import feat_batch
 from alphafold3.model import features
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model.components import haiku_modules as hm
 from alphafold3.model.components import utils
@@ -241,8 +242,8 @@ class Evoformer(hk.Module):
           masks=masks,
       )
 
-    evoformer_stack = hk.experimental.layer_stack(
-        self.config.msa_stack.num_layer
+    evoformer_stack = capture.layer_stack(
+        self.config.msa_stack.num_layer, stage="msa"
     )(evoformer_fn)
 
     evoformer_output = evoformer_stack(evoformer_input)
@@ -331,8 +332,8 @@ class Evoformer(hk.Module):
             seq_mask=batch.token_features.mask.astype(dtype),
         )
 
-      pairformer_stack = hk.experimental.layer_stack(
-          self.config.pairformer.num_layer
+      pairformer_stack = capture.layer_stack(
+          self.config.pairformer.num_layer, stage="trunk"
       )(pairformer_fn)
 
       pair_activations, single_activations = pairformer_stack(

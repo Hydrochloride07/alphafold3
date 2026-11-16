@@ -20,6 +20,7 @@
 """Confidence Head."""
 
 from alphafold3.common import base_config
+from alphafold3.model import capture
 from alphafold3.model import model_config
 from alphafold3.model.atom_layout import atom_layout
 from alphafold3.model.components import haiku_modules as hm
@@ -155,8 +156,8 @@ class ConfidenceHead(hk.Module):
             seq_mask=seq_mask,
         )
 
-      pairformer_stack = hk.experimental.layer_stack(
-          self.config.pairformer.num_layer
+      pairformer_stack = capture.layer_stack(
+          self.config.pairformer.num_layer, stage="confidence"
       )(pairformer_fn)
 
       pair_act, single_act = pairformer_stack((pair_act, single_act))
