@@ -1,0 +1,167 @@
+{
+  "version": 1,
+  "source_hashes": {
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0000-0128.json": "9ee98f7885440ee13ba7368bcaf83f0984e7de08928b190bcce9d8da29bcddd8",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0000-0128.npz": "c63108743d9fce9a17b63a3e1c0619be93f40bea1e8856762966abea36a60705",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0128-0256.json": "50c18905dd9442fa85f43d4db0a2b70a6afd0caf764b24de880e5a2bdbbaef47",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0128-0256.npz": "b15561c1cf46252997fb5d8556b230289daa20a8c41f2a3d8a3780c18bf15354",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0256-0384.json": "63b85d7736a9f108de3c1dba7cb6283760c9ad131fe822a38faf6906214385a5",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0256-0384.npz": "9540a38550a9f0c38c062092d191133d16a8fb7919b365fb8bb3abd6300210f3",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0384-0512.json": "d77cb49958e4da34a4fc70f1a72b0e01901de72d9e85ac4331f1d43787f15b1f",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0384-0512.npz": "3ae67ae71c2ca93722aa5c63c200c09284f2c83134ca56cdb7d39c8e7deb1e8e",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0000-0128.json": "9359a5ea620c8783f17ace57e72ba327b47a57076529d621ef6d4a3f56da2609",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0000-0128.npz": "1f6659ff637a9e926129c440f435429c2d68728ce1887fd983dcddc9d26bfa5b",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0128-0256.json": "31f8b8bc3e1695d33203c776c8db323b94b23c3e4227aab93a17b9155d761f3e",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0128-0256.npz": "3555c52e223d5b0ada4b526288aa4acd0c7d2ae5c720f7c9b9d6f9fe02775947",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0256-0384.json": "81a16adac41e8735873a5e8501a3b1ee55f33caee04f164633861b722e83d317",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0256-0384.npz": "70078123b2bd2e6811d4e351437125f98693dc0327990dbd317add531df395de",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0384-0512.json": "49fd1752c4f563332a6b6d98043530bf75195cf64538815bd0717c71c1aae10b",
+    "beta_trunk_offload/attempt-01/tensors/run-dddc2d948b7a4fbeb5b8c07d48aa87dc/events/beta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0384-0512.npz": "f8f126e35d62707d2571b6c8a6fcd0a6607e149a432064ee648ec3d48875ec28",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0000-0032_i-0000.json": "c460030c3e187b8748b61861efd1024899291cec3ed8e28d65fcab7c23d67c09",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0000-0032_i-0000.npz": "594272905c7621d48318293a9e914151299588bdbebe668bb30fe363d370efc6",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0256-0288_i-0256.json": "24e123fbbb0e8d1352fe86bf52c920ea27e7f5a8bfce6a91002ee71f00d90979",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0256-0288_i-0256.npz": "1940bee918e33325e7d0d2be6acc243e3cb72c0669b6041de4bcda5fc8c67d05",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0512-0544_i-0512.json": "c891dddd1b6b76fb382fbbe9fd314e52583701f9c2d595cf1c17909f52617f69",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0512-0544_i-0512.npz": "8baf22355355c567030114f739f00e211946ee523cf8b16c82613134309073fe",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0768-0800_i-0768.json": "6a9099716e15f26c70c44fa430b39afa714aaebc2b03cfcdd6d1e4251790a4d2",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0768-0800_i-0768.npz": "090018fefe39d8524ccd45f90c2e732e90fb4be3a23427618527503c0c2fd276",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1024-1056_i-1024.json": "daaedfca028c8af0ddacfde08fdc6310041a86bbf05c9ea73f317ed7058c7eae",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1024-1056_i-1024.npz": "5e4c1165eda16e667cf1f45dd8dd60d8b3fc263989bdd4c0fef0c90267762fc1",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1280-1312_i-1280.json": "a4c98ec349edd0880fcf8eb8744d3f191b2485fac5d4afa5b066fc2a8479f956",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1280-1312_i-1280.npz": "7c0fdf9f43f57d0518fb856e4a1152a7455766f28c1ff75a9f3fa745cbd8d752",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1536-1568_i-1536.json": "d449d7d006018a5f334a8271bb1cdc4843dcae52a7709894f45b55e5f7750457",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1536-1568_i-1536.npz": "3ce5939c64ee8107c79f3df95bff6877309f94e5c00a43238e5a207b3ce9e55d",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1792-1824_i-1792.json": "90e79f49151c71187ca5068ed75ae4fea919afb5723726617b760745c408049e",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-1792-1824_i-1792.npz": "fabc08c8194ed2ad9688b768e3e4cfaaa88759d2f874c874f6620d1cc783150b",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-2048-2080_i-2048.json": "bc2221e68dbe174c6a3f67e28f25d44914a4bdde2c1569047babb156ac5513b5",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-2048-2080_i-2048.npz": "72e3ca5384b869e06e76ec522ba21613c4f2ed736c3484541d76f8717af50fd9",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-2304-2336_i-2304.json": "f1543ba44860066ad66a1e44c9e71584696852bdf3254fe85402a6ae086e06d9",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-2304-2336_i-2304.npz": "95cde17a4beba969d07445a10e6d6e11eb5b0396e16f9971b46b1b7e477b6188",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0000-0032_i-0000.json": "b29846e857b0d7cd9e2a0b1263c268c0359a6b68a23702dc07237a91becf0fca",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0000-0032_i-0000.npz": "76736c3992e5df4015a4bcbf1a75d26fdcad713759a3a91272c119733ae959f9",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0256-0288_i-0256.json": "383295b19dea2420feb6002595c1dd8fdf859d9e9a137e567f26c5fd1c73b6a8",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0256-0288_i-0256.npz": "8ced329f5bc256167d63c4aa5f328bec3b17c3942854e351a90a2e2cd6920509",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0512-0544_i-0512.json": "eeb4f4b19f4681f693d8e32d88300876fb777036a9bcb704fdaa10210d863c50",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0512-0544_i-0512.npz": "6a53f20ee1fd03e0c8a8b13e3abf92751b2dc86b656a613de2abe4463326755d",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0768-0800_i-0768.json": "a7984f8d7895758c59fc173e0f9c5f32a0294cd896bf0f25ded0d18392c162c6",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0768-0800_i-0768.npz": "b6dd44ca0effdee61929f97cd631e00d5bc54842a2f7af364a220020fbecad61",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1024-1056_i-1024.json": "185c71619d9b47278fecc943e6ec449a29c0ff44a0d4ccfe8a827126abf0b5f8",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1024-1056_i-1024.npz": "6099d1b006f1c4eb6b50460f40b0cb0dd356d7c29070c1d288d8437728eec9e1",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1280-1312_i-1280.json": "c17c1cfa6263c1250cac2b0e48ee76ec01151a9f1822a6e54a54c587564f2031",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1280-1312_i-1280.npz": "d1424d48975de680e37f84385b80cd3b17bd0cf8a94b1c1df2da463a49cbfc36",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1536-1568_i-1536.json": "0596423cf21aec291b28c78ad309861b3133cb3997d14e0043ad232c16cf155a",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1536-1568_i-1536.npz": "7570d5749b32b574816beaa7557a83173de03a24ccd6590518c46068dfe1ba65",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1792-1824_i-1792.json": "50682b4880d38439d969f16668bfc0c014d3080aa539e8b994cd38fac7b34faf",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-1792-1824_i-1792.npz": "bb0ddc1e8ec2385ca025d5aa9ed9f7d1fe99a7886f2b5ab433d25df0af91c706",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-2048-2080_i-2048.json": "6c55cb92d20f64fef8fb7c00f7539f63be2ffd3a8cb93dccd35ba5a494c3a36d",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-2048-2080_i-2048.npz": "8c2a3947c248bffb4bb80a747f4efd4c50ebdf04a01f7828671d54819b1cfb71",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-2304-2336_i-2304.json": "4be55b820f2e721fbd9f0a0545b43aab6d154a333b9ccd979d30779fc0d2cb8c",
+    "trunk_recycle10_blocks1_16_32/batch-01/demo-cluster/attempt-04/tensors/run-059dbb116bd240fba1eb240118bb587c/events/demo_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-2304-2336_i-2304.npz": "14f4535770a94b3878e01ddc92f88ef7f14da3216839596e23aa4bc1cd143ade",
+    "trunk_recycle10_blocks1_16_32/batch-01/theta/attempt-01/tensors/run-e83d93cb6a3244a38738e08f4d6583ad/events/theta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0000-0128.json": "a7e5f2f5f4f74b44555f324ea81b1f77032f40d2ea41996b33c369483e198d35",
+    "trunk_recycle10_blocks1_16_32/batch-01/theta/attempt-01/tensors/run-e83d93cb6a3244a38738e08f4d6583ad/events/theta_seed-1_pairformer_recycle-10_block-16_pair-attention_ending_chunk-0000-0128.npz": "ca6f13fe962983ae7a07f8f2b7f44078083f89bd7c2cb31be7b20d72f08ac92e",
+    "trunk_recycle10_blocks1_16_32/batch-01/theta/attempt-01/tensors/run-e83d93cb6a3244a38738e08f4d6583ad/events/theta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0000-0128.json": "6cf633be727ca138f37c542a3c2124a2ac1daf2a5d291c25b595d24756e3126d",
+    "trunk_recycle10_blocks1_16_32/batch-01/theta/attempt-01/tensors/run-e83d93cb6a3244a38738e08f4d6583ad/events/theta_seed-1_pairformer_recycle-10_block-16_pair-attention_starting_chunk-0000-0128.npz": "339aac2d04812efc550251533a34a6cd5823df8da4b403d9b18265e2fda13210"
+  },
+  "groups": [
+    {
+      "input": "beta",
+      "direction": "ending",
+      "mask_group": "all_masked",
+      "capture_worst": {
+        "relative_l2": 0.0021233038878481986,
+        "max_abs": 0.030029296875
+      },
+      "head_rows": 472
+    },
+    {
+      "input": "beta",
+      "direction": "ending",
+      "mask_group": "has_keys",
+      "capture_worst": {
+        "relative_l2": 0.0020912737818719286,
+        "max_abs": 0.031199929021243022
+      },
+      "head_rows": 1576
+    },
+    {
+      "input": "beta",
+      "direction": "starting",
+      "mask_group": "all_masked",
+      "capture_worst": {
+        "relative_l2": 0.0022802772751799685,
+        "max_abs": 0.027587890625
+      },
+      "head_rows": 472
+    },
+    {
+      "input": "beta",
+      "direction": "starting",
+      "mask_group": "has_keys",
+      "capture_worst": {
+        "relative_l2": 0.0019653068450570907,
+        "max_abs": 0.03089828928860605
+      },
+      "head_rows": 1576
+    },
+    {
+      "input": "demo",
+      "direction": "ending",
+      "mask_group": "has_keys",
+      "capture_worst": {
+        "relative_l2": 0.008079426292541568,
+        "max_abs": 0.11217563075673187
+      },
+      "head_rows": 40
+    },
+    {
+      "input": "demo",
+      "direction": "starting",
+      "mask_group": "has_keys",
+      "capture_worst": {
+        "relative_l2": 0.0033491082280204,
+        "max_abs": 0.05776827192313405
+      },
+      "head_rows": 40
+    },
+    {
+      "input": "theta",
+      "direction": "ending",
+      "mask_group": "all_masked",
+      "capture_worst": {
+        "relative_l2": 0.0019675586414624976,
+        "max_abs": 0.02978515625
+      },
+      "head_rows": 232
+    },
+    {
+      "input": "theta",
+      "direction": "ending",
+      "mask_group": "has_keys",
+      "capture_worst": {
+        "relative_l2": 0.0021002412562942142,
+        "max_abs": 0.015591238235370675
+      },
+      "head_rows": 280
+    },
+    {
+      "input": "theta",
+      "direction": "starting",
+      "mask_group": "all_masked",
+      "capture_worst": {
+        "relative_l2": 0.002061176150335334,
+        "max_abs": 0.0263671875
+      },
+      "head_rows": 232
+    },
+    {
+      "input": "theta",
+      "direction": "starting",
+      "mask_group": "has_keys",
+      "capture_worst": {
+        "relative_l2": 0.0021086754438662714,
+        "max_abs": 0.02487754032405043
+      },
+      "head_rows": 280
+    }
+  ]
+}

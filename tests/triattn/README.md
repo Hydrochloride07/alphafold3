@@ -1,5 +1,7 @@
 # Triangle Attention 单次精度回放
 
+接入新 kernel 的正式验收请看 [精度准入规范](ACCURACY_GATE.md)。
+
 `verify.py` 在 gate 之前验证一个已保存的 attention chunk。默认读取 theta ending 的完整事件并调用 Tokamax XLA。回放使用 AF3 的 Python 环境与已有张量抓取，无需加载模型权重。
 
 在 AF3 仓库根目录运行回放，给每次运行选择一个新的输出目录。
@@ -41,4 +43,6 @@ JAX_PLATFORMS=cpu OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 - `errors.csv` 按事件、`i` 和 head 列出 `capture_vs_fp64` 与 `candidate_vs_fp64`，包含相对 L2、最大绝对误差、最坏 query/channel 和 mask 分组。默认单事件有 1,024 行，全量有 10,400 行。
 - `run_summary.json` 汇总分组最坏值、容差超限、运行环境、失败和源文件的前后 SHA-256。
 
-默认记录数值误差。传入 `--max-relative-l2`、`--max-abs` 或两者时，脚本逐 `i`、逐 head 检查本次输出与 FP64 的差异。参考范数为零且误差非零时，相对 L2 留空，启用相对 L2 限制时视为超限。运行失败、出现非有限值、源文件变化或超限均返回非零。
+终端和 `run_summary.json` 默认报告 `accuracy_gate=passed` 或 `failed`。回放直接使用预先计算的抓取误差作为基线。单事件只检查所选事件，完整验收使用 `--all`。门控失败返回非零。详见 [精度准入规范](ACCURACY_GATE.md)。
+
+传入 `--max-relative-l2`、`--max-abs` 或两者时，脚本逐 `i`、逐 head 检查本次输出与 FP64 的差异。参考范数为零且误差非零时，相对 L2 留空，启用单次回放的相对 L2 限制时视为超限。运行失败、出现非有限值、源文件变化或超限均返回非零。

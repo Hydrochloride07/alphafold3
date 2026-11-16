@@ -15,6 +15,7 @@ from pathlib import Path
 import platform
 import sys
 
+import accuracy_gate
 from absl import flags
 from alphafold3.model.components import triangle_attention
 import jax
@@ -27,8 +28,9 @@ QKV = ('query', 'key', 'value')
 DIRECTIONS = {'starting': 'pair_attention1', 'ending': 'pair_attention2'}
 BATCH = 'trunk_recycle10_blocks1_16_32/batch-01'
 DEFAULT_CAPTURE_ROOT = Path(__file__).resolve().parent / 'data'
-CAPTURE = 'capture_vs_fp64'
-CANDIDATE = 'candidate_vs_fp64'
+DEFAULT_ACCURACY_BASELINE = DEFAULT_CAPTURE_ROOT / 'accuracy_baseline.json'
+CAPTURE = accuracy_gate.CAPTURE
+CANDIDATE = accuracy_gate.CANDIDATE
 
 
 @dataclass(frozen=True)
@@ -240,13 +242,16 @@ def replay(event, run):
   raw = load_event(event)
   meta = event.record['metadata']
   scale = float(meta['scale'])
-  # One JIT invocation on the complete stored event, including the ending layout.
-  result = np.asarray(jax.device_get(run(
-      **{name: raw[name] for name in (*QKV, 'bias', 'mask')}, scale=scale,
-  )), dtype=np.float32)
   q, k, v, bias, captured = (
       decode_bfloat16(raw[name]) for name in (*QKV, 'bias', 'result')
   )
+  outputs = [(CAPTURE, captured)]
+  if run is not None:
+    # One JIT invocation on the complete stored event, including the ending layout.
+    result = np.asarray(jax.device_get(run(
+        **{name: raw[name] for name in (*QKV, 'bias', 'mask')}, scale=scale,
+    )), dtype=np.float32)
+    outputs.append((CANDIDATE, result))
   for batch_index, i in enumerate(event.indices):
     keep = raw['mask'][batch_index, 0, 0]
     key_count = int(keep.sum())
@@ -261,7 +266,7 @@ def replay(event, run):
     for head in range(q.shape[-2]):
       at = (batch_index, slice(None), head)
       ref = reference_head(q[at], k[at], v[at], bias[0, head], keep, scale)
-      for comparison, output in ((CAPTURE, captured), (CANDIDATE, result)):
+      for comparison, output in outputs:
         yield dict(
             **common, head=head, comparison=comparison, **metrics(ref, output[at])
         )
@@ -314,6 +319,14 @@ def main(argv=None):
   parser.add_argument('--all', action='store_true', help='Replay all 30 accepted events')
   parser.add_argument('--output-dir', required=True, type=Path)
   parser.add_argument(
+      '--prepare-accuracy-baseline', action='store_true',
+      help='Score all frozen captures against CPU FP64 and write accuracy_baseline.json',
+  )
+  parser.add_argument(
+      '--accuracy-baseline', type=Path, default=DEFAULT_ACCURACY_BASELINE,
+      help='Precomputed captured-output errors used by the default accuracy gate',
+  )
+  parser.add_argument(
       '--triangle_attention_kernel', metavar='MODULE:FUNCTION',
       help='Use the same JAX plugin as run_alphafold.py',
   )
@@ -324,6 +337,13 @@ def main(argv=None):
   parser.add_argument('--max-relative-l2', type=nonnegative_number)
   parser.add_argument('--max-abs', type=nonnegative_number)
   args = parser.parse_args(argv)
+  prepare_baseline = args.prepare_accuracy_baseline
+  if prepare_baseline:
+    if any(value is not None for value in (
+        args.triangle_attention_kernel, args.max_relative_l2, args.max_abs,
+    )):
+      parser.error('--prepare-accuracy-baseline scores the captured outputs only')
+    args.all = True
   if args.all and any(x is not None for x in (args.input, args.direction, args.i)):
     parser.error('--all cannot be combined with --input, --direction or --i')
   # Tokamax reads Abseil flags lazily. The replay CLI has parsed its own flags.
@@ -333,6 +353,8 @@ def main(argv=None):
   implementation = args.flash_attention_implementation
   kernel_spec = args.triangle_attention_kernel
   backend_name = kernel_spec if kernel_spec is not None else f'tokamax:{implementation}'
+  if prepare_baseline:
+    backend_name = 'capture'
   candidate = {'name': backend_name}
   try:
     if kernel_spec is not None:
@@ -361,14 +383,14 @@ def main(argv=None):
       digests[event.path.with_suffix('.json')] = event.record_digest
     paths = sorted(digests)
     before = {str(path): digests[path] for path in paths}
-    device = jax.devices()[0]
+    device = None if prepare_baseline else jax.devices()[0]
     output.mkdir(parents=True, exist_ok=False)
   except (KeyError, OSError, TypeError, ValueError, RuntimeError) as exc:
     parser.error(str(exc))
 
-  run = make_replayer(implementation, kernel_spec)
+  run = None if prepare_baseline else make_replayer(implementation, kernel_spec)
   print(
-      f'Replaying {len(events)} event(s) using {backend_name} on {device}',
+      f'Scoring {len(events)} event(s) using {backend_name} on {device or "CPU NumPy"}',
       flush=True,
   )
   failures, all_rows = [], []
@@ -399,6 +421,38 @@ def main(argv=None):
       after[str(path)] = None
       failures.append(dict(event=str(path), error=f'Cannot rehash source: {exc}'))
   groups = summarize(all_rows)
+  comparisons = (CAPTURE,) if prepare_baseline else (CAPTURE, CANDIDATE)
+  expected_rows = {
+      ((event.record['metadata']['input_name'],
+        event.record['metadata']['direction'], str(event.path), i, head), comparison)
+      for event in events for i in event.indices for head in range(4)
+      for comparison in comparisons
+  }
+  reasons = accuracy_gate.integrity_errors(
+      all_rows, expected_rows, failures=failures, inputs_unchanged=before == after,
+  )
+  event_hashes = {
+      path.relative_to(root).as_posix(): before[str(path)]
+      for path in paths if path.suffix in ('.npz', '.json')
+  }
+  if reasons:
+    gate = dict(status='failed', passed=False, reasons=reasons)
+  elif prepare_baseline:
+    baseline_path = output / 'accuracy_baseline.json'
+    baseline = accuracy_gate.prepare(all_rows, event_hashes)
+    baseline_path.write_text(
+        json.dumps(baseline, indent=2, allow_nan=False) + '\n', encoding='utf-8',
+    )
+    gate = dict(status='prepared', passed=None, baseline=str(baseline_path))
+  else:
+    baseline_path = args.accuracy_baseline.expanduser().resolve()
+    try:
+      baseline = json.loads(baseline_path.read_text(encoding='utf-8'))
+      gate = accuracy_gate.evaluate(all_rows, event_hashes, baseline)
+    except (OSError, KeyError, ValueError, TypeError) as exc:
+      gate = dict(status='failed', passed=False, reasons=[str(exc)])
+    gate['baseline'] = str(baseline_path)
+  gate['scope'] = 'full' if args.all else 'selected'
   violations = [
       row for row in all_rows
       if row['comparison'] == CANDIDATE and (
@@ -408,6 +462,7 @@ def main(argv=None):
   ]
   report = dict(
       recycle=RECYCLE, block=LAYER + 1, candidate=candidate,
+      accuracy_gate=gate,
       reference='NumPy FP64 stable softmax; all-masked: broadcast mean(V)',
       quality_gate=dict(
           max_relative_l2=args.max_relative_l2, max_abs=args.max_abs,
@@ -416,12 +471,16 @@ def main(argv=None):
       ),
       environment=dict(
           platform=platform.platform(), python=sys.version, numpy=np.__version__,
-          jax=jax.__version__, tokamax=importlib.metadata.version('tokamax'),
-          device=str(device), device_kind=device.device_kind,
-          variables={name: os.environ.get(name) for name in (
-              'JAX_PLATFORMS', 'XLA_FLAGS', 'CUDA_VISIBLE_DEVICES',
-              'OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS',
-          )},
+          jax=jax.__version__, jaxlib=importlib.metadata.version('jaxlib'),
+          tokamax=importlib.metadata.version('tokamax'),
+          device=str(device or 'CPU NumPy'),
+          device_kind=device.device_kind if device is not None else 'CPU',
+          variables={
+              name: value for name, value in os.environ.items()
+              if name.startswith(('JAX_', 'XLA_', 'TOKAMAX_'))
+              or name in {'CUDA_VISIBLE_DEVICES', 'CUDA_DEVICE_ORDER',
+                          'OPENBLAS_NUM_THREADS', 'OMP_NUM_THREADS'}
+          },
       ),
       event_count=len(events), i_count=sum(len(event.indices) for event in events),
       metric_rows=len(all_rows),
@@ -439,11 +498,14 @@ def main(argv=None):
   nonfinite = sum(group['nonfinite_count'] for group in groups)
   print(
       f'{len(events)} events, {len(all_rows)} metric rows, {len(failures)} failures, '
-      f'{nonfinite} nonfinite values, {len(violations)} tolerance violations, '
-      f'inputs unchanged={before == after}',
+      f'{nonfinite} nonfinite values, {len(violations)} manual tolerance violations, '
+      f'inputs unchanged={before == after}, accuracy_gate={gate["status"]} '
+      f'({gate.get("violation_count", 0)} threshold violations)',
       flush=True,
   )
-  return int(bool(failures or nonfinite or violations or before != after))
+  for reason in gate.get('reasons', []):
+    print(reason, file=sys.stderr)
+  return int(gate['passed'] is False or bool(violations))
 
 
 if __name__ == '__main__':
