@@ -26,6 +26,7 @@ from alphafold3.common import base_config
 from alphafold3.model import model_config
 from alphafold3.model.components import haiku_modules as hm
 from alphafold3.model.components import mapping
+from alphafold3.model.components import triangle_attention
 from alphafold3.model.network import diffusion_transformer
 import haiku as hk
 import jax
@@ -181,13 +182,14 @@ class GridSelfAttention(hk.Module):
     # Dot product attention requires the bias term to have a batch dimension.
     bias = jnp.expand_dims(bias, 0)
 
-    weighted_avg = tokamax.dot_product_attention(
+    weighted_avg = triangle_attention.attention(
         q,
         k,
         v,
         mask=mask,
         bias=bias,
         implementation=self.global_config.flash_attention_implementation,
+        kernel_spec=self.global_config.triangle_attention_kernel,
     )
     weighted_avg = jnp.reshape(weighted_avg, weighted_avg.shape[:-2] + (-1,))
 

@@ -42,3 +42,4 @@ class GlobalConfig(base_config.BaseConfig):
   flash_attention_implementation: tokamax.DotProductAttentionImplementation = (
       'triton'
   )
+  triangle_attention_kernel: str | None = None

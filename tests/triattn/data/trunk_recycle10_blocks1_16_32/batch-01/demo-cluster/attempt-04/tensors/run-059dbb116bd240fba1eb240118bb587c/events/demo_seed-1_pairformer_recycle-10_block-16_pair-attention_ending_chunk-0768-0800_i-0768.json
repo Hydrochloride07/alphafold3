@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "event_id": "7a69e9b1b90b4aa3b7d7223b56082564",
+  "metadata": {
+    "recycle": 10,
+    "recycle_count": 11,
+    "layer": 15,
+    "layer_count": 48,
+    "template": null,
+    "template_count": null,
+    "diffusion_step": null,
+    "diffusion_step_count": null,
+    "sample": null,
+    "sample_count": null,
+    "super_block": null,
+    "super_block_count": null,
+    "block": null,
+    "block_count": null,
+    "chunk_start": 768,
+    "chunk_end": 800,
+    "chunk_axis": 0,
+    "chunk_total": 2560,
+    "stage": "trunk",
+    "direction": "ending",
+    "invocation_id": 0,
+    "input_name": "demo",
+    "seed": 1,
+    "implementation": "triton",
+    "scale": 0.1767766952966369,
+    "layout": "...qhc",
+    "operator": "attention",
+    "module_path": "trunk_pairformer/pair_attention2",
+    "i_step": 256,
+    "sampled_i": 768
+  },
+  "tensors": {
+    "query": {
+      "shape": [
+        1,
+        2560,
+        4,
+        32
+      ],
+      "dtype": "bfloat16",
+      "storage_dtype": "uint16"
+    },
+    "key": {
+      "shape": [
+        1,
+        2560,
+        4,
+        32
+      ],
+      "dtype": "bfloat16",
+      "storage_dtype": "uint16"
+    },
+    "value": {
+      "shape": [
+        1,
+        2560,
+        4,
+        32
+      ],
+      "dtype": "bfloat16",
+      "storage_dtype": "uint16"
+    },
+    "mask": {
+      "shape": [
+        1,
+        1,
+        1,
+        2560
+      ],
+      "dtype": "bool",
+      "storage_dtype": "bool"
+    },
+    "bias": {
+      "shape": [
+        1,
+        4,
+        2560,
+        2560
+      ],
+      "dtype": "bfloat16",
+      "storage_dtype": "uint16"
+    },
+    "result": {
+      "shape": [
+        1,
+        2560,
+        4,
+        32
+      ],
+      "dtype": "bfloat16",
+      "storage_dtype": "uint16"
+    }
+  }
+}

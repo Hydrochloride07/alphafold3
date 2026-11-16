@@ -56,6 +56,7 @@ from alphafold3.model import features
 from alphafold3.model import model
 from alphafold3.model import params
 from alphafold3.model import post_processing
+from alphafold3.model.components import triangle_attention
 from alphafold3.model.components import utils
 from etils import epath
 import haiku as hk
@@ -352,7 +353,8 @@ _JAX_BACKEND = flags.DEFINE_enum_class(
         ' only for inference which is much slower than using a GPU, but can be'
         ' useful for testing or running on systems without a GPU supported by'
         ' JAX. "mps" uses a GPU on Apple Silicon. If you set this flag to "cpu"'
-        ' or "mps", you must also set --flash_attention_implementation=xla.'
+        ' or "mps", use --flash_attention_implementation=xla or supply a'
+        ' compatible --triangle_attention_kernel.'
     ),
 )
 _BUCKETS = flags.DEFINE_list(
@@ -376,6 +378,15 @@ _FLASH_ATTENTION_IMPLEMENTATION = flags.DEFINE_enum(
         " Triton and cuDNN kernels require Ampere GPUs or later. 'xla' uses an"
         ' XLA attention implementation (no flash attention) and is portable'
         ' across GPU devices.'
+    ),
+)
+_TRIANGLE_ATTENTION_KERNEL = flags.DEFINE_string(
+    'triangle_attention_kernel',
+    default=None,
+    help=(
+        'Importable MODULE:FUNCTION for the triangle attention kernel. Takes'
+        ' precedence over --flash_attention_implementation. See'
+        ' mod/triattn/README.md for the callable contract.'
     ),
 )
 _NUM_RECYCLES = flags.DEFINE_integer(
@@ -441,16 +452,20 @@ _COMPRESS_LARGE_OUTPUT_FILES = flags.DEFINE_bool(
 def make_model_config(
     *,
     flash_attention_implementation: tokamax.DotProductAttentionImplementation = 'triton',
+    triangle_attention_kernel: str | None = None,
     num_diffusion_samples: int = 5,
     num_recycles: int = 10,
     return_embeddings: bool = False,
     return_distogram: bool = False,
 ) -> model.Model.Config:
   """Returns a model config with some defaults overridden."""
+  if triangle_attention_kernel is not None:
+    triangle_attention.load_kernel(triangle_attention_kernel)
   config = model.Model.Config()
   config.global_config.flash_attention_implementation = (
       flash_attention_implementation
   )
+  config.global_config.triangle_attention_kernel = triangle_attention_kernel
   config.heads.diffusion.eval.num_samples = num_diffusion_samples
   config.num_recycles = num_recycles
   config.return_embeddings = return_embeddings
@@ -501,8 +516,14 @@ class ModelRunner:
         self._device,
     )
 
-    result = self._model(rng_key, featurised_example)
-    result = jax.tree.map(np.asarray, result)
+    try:
+      result = self._model(rng_key, featurised_example)
+      result = jax.tree.map(np.asarray, result)
+    except Exception as exc:
+      kernel_spec = self._model_config.global_config.triangle_attention_kernel
+      if kernel_spec is not None:
+        exc.add_note(f'Active triangle attention kernel: {kernel_spec!r}')
+      raise
     result = jax.tree.map(
         lambda x: x.astype(jnp.float32) if x.dtype == jnp.bfloat16 else x,
         result,
@@ -949,8 +970,12 @@ def main(_):
 
   if _RUN_INFERENCE.value:
     # Fail early on incompatible devices, but only if we're running inference.
+    uses_builtin_attention = _TRIANGLE_ATTENTION_KERNEL.value is None
     if _JAX_BACKEND.value in {JaxBackend.CPU, JaxBackend.MPS}:
-      if _FLASH_ATTENTION_IMPLEMENTATION.value != 'xla':
+      if (
+          uses_builtin_attention
+          and _FLASH_ATTENTION_IMPLEMENTATION.value != 'xla'
+      ):
         raise ValueError(
             'For CPU-only or MPS inference, --flash_attention_implementation'
             ' must be set to "xla".'
@@ -982,7 +1007,10 @@ def main(_):
                 ' https://developer.nvidia.com/cuda-gpus) the ENV XLA_FLAGS'
                 f' must include "{required_flag}".'
             )
-          if _FLASH_ATTENTION_IMPLEMENTATION.value != 'xla':
+          if (
+              uses_builtin_attention
+              and _FLASH_ATTENTION_IMPLEMENTATION.value != 'xla'
+          ):
             raise ValueError(
                 'For devices with GPU compute capability 7.x (see'
                 ' https://developer.nvidia.com/cuda-gpus) the'
@@ -1056,6 +1084,7 @@ def main(_):
                 tokamax.DotProductAttentionImplementation,
                 _FLASH_ATTENTION_IMPLEMENTATION.value,
             ),
+            triangle_attention_kernel=_TRIANGLE_ATTENTION_KERNEL.value,
             num_diffusion_samples=_NUM_DIFFUSION_SAMPLES.value,
             num_recycles=_NUM_RECYCLES.value,
             return_embeddings=_SAVE_EMBEDDINGS.value,
