@@ -17,3 +17,6 @@ __pycache__/
 /src/alphafold3/constants/converters/chemical_component_sets.msgpack
 
 /build/
+
+/AGENTS.md
+/CLUSTER.md
