@@ -17,12 +17,12 @@ _PROBABILITY_RANGE = 224.0
 _VALUE_RANGE = 4.5
 
 
-def _quantize(x, *, axis, limit, dtype, components):
+def _quantize(x, *, axis, limit, dtype, components): # 多组残差
   """Returns successively quantized (operand, scale) terms."""
   terms = []
   for _ in range(components):
     scale = jnp.max(jnp.abs(x), axis=axis, keepdims=True) / limit
-    scale = jnp.where(scale > 0, scale, 1.0)
+    scale = jnp.where(scale > 0, scale, 1.0) # >0 是否有浮点问题？是否改成 >eps
     normalized = jnp.clip(x / scale, -limit, limit)
     if dtype == jnp.int8:
       normalized = jnp.rint(normalized)
