@@ -20,3 +20,6 @@ __pycache__/
 
 /AGENTS.md
 /CLUSTER.md
+/.cluster-mcp/
+/tools/
+/tmp/

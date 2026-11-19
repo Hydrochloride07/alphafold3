@@ -35,7 +35,9 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 \
 PYTHONPATH="$PWD${PYTHONPATH:+:$PYTHONPATH}" \
   .venv/bin/python -B tests/triattn/verify.py --all \
   --triangle_attention_kernel=your_module:attention \
-  --output-dir /tmp/triattn-candidate
+  --output-dir /tmp/triattn-candidate --visualize
 ```
 
 终端与 `run_summary.json` 默认输出 `accuracy_gate`。门控失败时退出码为非零。demo 只覆盖单 i 事件，且当前抓取使用 BF16。
+
+可选参数 `--visualize` 在输出目录额外生成 `accuracy_report.html`，可用浏览器离线打开。报告按输入、方向和 mask 分组，绘制抓取输出和候选输出相对 FP64 的最大误差及门槛，并列出候选误差的中位数、P95 和超限次数。门控失败时报告也会保存，具体超限位置可从报告链接的 JSON 和 CSV 查阅。

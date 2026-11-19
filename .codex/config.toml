@@ -1,0 +1,7 @@
+[mcp_servers.alphafold3_cluster]
+command = "sh"
+args = [
+    "-c",
+    '''exec ssh -T -F "$HOME/.ssh/config" alphafold3-scc 'exec sh "$HOME/alphafold3/tools/slurm_mcp/serve.sh"' ''',
+]
+startup_timeout_sec = 30

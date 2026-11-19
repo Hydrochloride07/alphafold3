@@ -319,6 +319,10 @@ def main(argv=None):
   parser.add_argument('--all', action='store_true', help='Replay all 30 accepted events')
   parser.add_argument('--output-dir', required=True, type=Path)
   parser.add_argument(
+      '--visualize', action='store_true',
+      help='Write accuracy_report.html alongside the CSV and JSON results',
+  )
+  parser.add_argument(
       '--prepare-accuracy-baseline', action='store_true',
       help='Score all frozen captures against CPU FP64 and write accuracy_baseline.json',
   )
@@ -505,6 +509,15 @@ def main(argv=None):
   )
   for reason in gate.get('reasons', []):
     print(reason, file=sys.stderr)
+  if args.visualize:
+    from accuracy_report import write_report
+
+    report_path = output / 'accuracy_report.html'
+    try:
+      write_report(report_path, report)
+    except OSError as exc:
+      parser.exit(1, f'Could not write accuracy report: {exc}\n')
+    print(f'Accuracy report: {report_path}', flush=True)
   return int(gate['passed'] is False or bool(violations))
 
 
